@@ -1,7 +1,7 @@
 {
   "name": "milano-selfie-server",
   "version": "1.0.0",
-  "description": "Simple server to share selfie codes between MILANO extensions",
+  "description": "Simple server to share a single selfie code between MILANO extensions",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
