@@ -6,151 +6,92 @@ const cors = require('cors');
 
 const app = express();
 
-// ======== إعدادات من .env ========
+// ===== إعدادات من .env =====
 const PORT = process.env.PORT || 8080;
-const ALLOWED_TOKENS =
-  (process.env.ALLOWED_TOKENS || '')
-    .split(',')
-    .map(t => t.trim())
-    .filter(Boolean);
-
 const SELFIE_TTL_MINUTES = parseInt(process.env.SELFIE_TTL_MINUTES || '30', 10);
 const SELFIE_TTL_MS = SELFIE_TTL_MINUTES * 60 * 1000;
 
-// ======== وسطيات عامة ========
-app.use(cors());            // يسمح للمتصفحات / الإضافات بالوصول
-app.use(express.json());    // يفك JSON body
+// وسطيات
+app.use(cors());
+app.use(express.json());
 
-// تخزين بسيط في RAM: token -> { code, ts }
-const selfieStore = new Map();
+// نخزن غير كود واحد عالمي
+let selfieEntry = null; // { code, ts }
 
-// تنظيف الكود المنتهي الصلاحية
+// واش منتهي الصلاحية؟
 function isExpired(entry) {
   if (!entry) return true;
-  if (!SELFIE_TTL_MS || SELFIE_TTL_MS <= 0) return false; // لا تنتهي الصلاحية
+  if (!SELFIE_TTL_MS || SELFIE_TTL_MS <= 0) return false; // ماكاينش صلاحية
   return Date.now() - entry.ts > SELFIE_TTL_MS;
 }
 
-function validateToken(token) {
-  if (!ALLOWED_TOKENS.length) return true; // لو ماحددنا حتى واحد، نقبل كلشي (اختياري)
-  return ALLOWED_TOKENS.includes(token);
-}
-
-// ======== Routes ========
-
-// صفحة بسيطة للفحص
+// صفحة فحص بسيطة
 app.get('/', (req, res) => {
   res.json({
     ok: true,
-    service: 'MILANO Selfie Server',
+    service: 'MILANO Selfie Server (no token)',
     now: new Date().toISOString(),
-    ttl_minutes: SELFIE_TTL_MINUTES,
+    ttl_minutes: SELFIE_TTL_MINUTES
   });
 });
 
-// POST /api/selfie  { token, code }
+// POST /api/selfie  { code }
 app.post('/api/selfie', (req, res) => {
-  const { token, code } = req.body || {};
+  const { code } = req.body || {};
 
-  if (!token || !code) {
+  if (!code) {
     return res.status(400).json({
       ok: false,
-      error: 'token and code are required',
+      error: 'code is required'
     });
   }
 
-  if (!validateToken(token)) {
-    return res.status(403).json({
-      ok: false,
-      error: 'token not allowed',
-    });
-  }
-
-  selfieStore.set(token, {
+  selfieEntry = {
     code,
-    ts: Date.now(),
-  });
+    ts: Date.now()
+  };
 
-  console.log(`[SELFIE][SET] token=${token} code=${code}`);
+  console.log(`[SELFIE][SET] code=${code}`);
 
   res.json({
-    ok: true,
-    token,
+    ok: true
   });
 });
 
-// GET /api/selfie?token=ROOM
+// GET /api/selfie
 app.get('/api/selfie', (req, res) => {
-  const token = (req.query.token || '').trim();
-
-  if (!token) {
-    return res.status(400).json({
-      ok: false,
-      error: 'token is required',
-    });
-  }
-
-  if (!validateToken(token)) {
-    return res.status(403).json({
-      ok: false,
-      error: 'token not allowed',
-    });
-  }
-
-  const entry = selfieStore.get(token);
-
-  if (!entry || isExpired(entry)) {
-    if (entry && isExpired(entry)) {
-      selfieStore.delete(token);
-      console.log(`[SELFIE][EXPIRE] token=${token}`);
+  if (!selfieEntry || isExpired(selfieEntry)) {
+    if (selfieEntry && isExpired(selfieEntry)) {
+      console.log('[SELFIE][EXPIRE]');
+      selfieEntry = null;
     }
 
     return res.json({
       ok: true,
-      token,
       code: null,
-      expired: true,
+      expired: true
     });
   }
 
   res.json({
     ok: true,
-    token,
-    code: entry.code,
-    ts: entry.ts,
-    expired: false,
+    code: selfieEntry.code,
+    ts: selfieEntry.ts,
+    expired: false
   });
 });
 
-// (اختياري) مسح الكود: DELETE /api/selfie?token=ROOM
+// DELETE /api/selfie  (اختياري لمسح الكود)
 app.delete('/api/selfie', (req, res) => {
-  const token = (req.query.token || '').trim();
-
-  if (!token) {
-    return res.status(400).json({
-      ok: false,
-      error: 'token is required',
-    });
-  }
-
-  if (!validateToken(token)) {
-    return res.status(403).json({
-      ok: false,
-      error: 'token not allowed',
-    });
-  }
-
-  selfieStore.delete(token);
-  console.log(`[SELFIE][DELETE] token=${token}`);
-
+  selfieEntry = null;
+  console.log('[SELFIE][DELETE]');
   res.json({
     ok: true,
-    token,
-    deleted: true,
+    deleted: true
   });
 });
 
-// ======== بدء السرفر ========
+// تشغيل السرفر
 app.listen(PORT, () => {
-  console.log(`MILANO Selfie Server listening on port ${PORT}`);
+  console.log(`MILANO Selfie Server (no token) listening on port ${PORT}`);
 });
